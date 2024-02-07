@@ -1,0 +1,37 @@
+name: 'shinnytech-oss-upload'
+description: '上传项目文件到阿里云 shinny-cd'
+inputs:
+  upload-from-dir:
+    description: "上传的目录"
+    required: true
+  upload-target:
+    description: "上传的目标项目地址"
+    required: true
+  access-key-id:
+    description: "AccessKeyID"
+    required: true
+  access-key-secret:
+    description: "AccessKeySceret"
+    required: true
+  endpoint:
+    description: "填写Bucket所在地域的域名信息，可参考访问域名和数据中心。默认为 oss-accelerate.aliyuncs.com"
+    required: false
+    default: "oss-accelerate.aliyuncs.com"
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        if [[ $GITHUB_REF_TYPE == 'tag' ]]; then
+          echo "DEST_DIR=$(echo ${GITHUB_REF##*/})/" >> $GITHUB_ENV
+        else
+          echo "DEST_DIR=$(echo ${GITHUB_REF##*/})/$(echo ${GITHUB_SHA:0:7})/" >> $GITHUB_ENV
+        fi
+        echo "DEST_DIR is $DEST_DIR"
+      shell: bash
+    - uses: manyuanrong/setup-ossutil@v2.0
+      with:
+        endpoint: "oss-accelerate.aliyuncs.com"
+        access-key-id: ${{ inputs.access-key-id }}
+        access-key-secret: ${{ inputs.access-key-secret }}
+    - run: ossutil cp -rf --recursive {{ inputs.upload-from-dir }} oss://shinny-cd/${{inputs.upload-target}}/${{env.DEST_DIR}}
+      shell: bash
