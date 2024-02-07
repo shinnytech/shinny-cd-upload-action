@@ -31,7 +31,7 @@ runs:
     - uses: manyuanrong/setup-ossutil@v2.0
       with:
         endpoint: "oss-accelerate.aliyuncs.com"
-        access-key-id: ${{ inputs.access-key-id }}
-        access-key-secret: ${{ inputs.access-key-secret }}
-    - run: ossutil cp -rf --recursive {{ inputs.upload-from-dir }} oss://shinny-cd/${{inputs.upload-target}}/${{env.DEST_DIR}}
+        access-key-id: ${{inputs.access-key-id}}
+        access-key-secret: ${{inputs.access-key-secret}}
+    - run: ossutil cp -rf --recursive ${{inputs.upload-from-dir}} oss://shinny-cd/${{inputs.upload-target}}/${{env.DEST_DIR}}
       shell: bash
