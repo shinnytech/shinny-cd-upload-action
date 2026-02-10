@@ -23,6 +23,8 @@ runs:
     - run: |
         if [[ $GITHUB_REF_TYPE == 'tag' ]]; then
           echo "DEST_DIR=$(echo ${GITHUB_REF##*/})/" >> $GITHUB_ENV
+        elif [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+          echo "DEST_DIR=${GITHUB_HEAD_REF}/$(echo ${GITHUB_HEAD_SHA:0:7})/" >> $GITHUB_ENV
         else
           echo "DEST_DIR=$(echo ${GITHUB_REF##*/})/$(echo ${GITHUB_SHA:0:7})/" >> $GITHUB_ENV
         fi
