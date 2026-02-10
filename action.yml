@@ -22,12 +22,18 @@ runs:
   steps:
     - run: |
         if [[ $GITHUB_REF_TYPE == 'tag' ]]; then
-          echo "DEST_DIR=$(echo ${GITHUB_REF##*/})/" >> $GITHUB_ENV
+          DEST_DIR="$(echo ${GITHUB_REF##*/})/"
         elif [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
-          echo "DEST_DIR=${GITHUB_HEAD_REF}/$(echo ${GITHUB_HEAD_SHA:0:7})/" >> $GITHUB_ENV
+          # 从事件 payload 读取 PR 源头分支和 commit，避免 composite 中 GITHUB_HEAD_SHA 未注入
+          PR_HEAD_REF=$(jq -r '.pull_request.head.ref // empty' "$GITHUB_EVENT_PATH")
+          PR_HEAD_SHA=$(jq -r '.pull_request.head.sha // empty' "$GITHUB_EVENT_PATH")
+          PR_HEAD_REF="${PR_HEAD_REF:-$GITHUB_HEAD_REF}"
+          PR_HEAD_SHA="${PR_HEAD_SHA:-${GITHUB_HEAD_SHA:-$GITHUB_SHA}}"
+          DEST_DIR="${PR_HEAD_REF}/$(echo ${PR_HEAD_SHA:0:7})/"
         else
-          echo "DEST_DIR=$(echo ${GITHUB_REF##*/})/$(echo ${GITHUB_SHA:0:7})/" >> $GITHUB_ENV
+          DEST_DIR="$(echo ${GITHUB_REF##*/})/$(echo ${GITHUB_SHA:0:7})/"
         fi
+        echo "DEST_DIR=$DEST_DIR" >> $GITHUB_ENV
         echo "DEST_DIR is $DEST_DIR"
       shell: bash
     - uses: manyuanrong/setup-ossutil@v2.0
