@@ -17,6 +17,10 @@ inputs:
     description: "填写Bucket所在地域的域名信息，可参考访问域名和数据中心。默认为 oss-accelerate.aliyuncs.com"
     required: false
     default: "oss-accelerate.aliyuncs.com"
+  sts-token:
+    description: "采用 STS 临时授权方式访问 OSS 时填写"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -37,10 +41,69 @@ runs:
         echo "DEST_DIR=$DEST_DIR" >> $GITHUB_ENV
         echo "DEST_DIR is $DEST_DIR"
       shell: bash
-    - uses: manyuanrong/setup-ossutil@v2.0
-      with:
-        endpoint: "oss-accelerate.aliyuncs.com"
-        access-key-id: ${{inputs.access-key-id}}
-        access-key-secret: ${{inputs.access-key-secret}}
-    - run: ossutil cp -rf --recursive ${{inputs.upload-from-dir}} oss://shinny-cd/${{inputs.upload-target}}/${{env.DEST_DIR}}
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        case "$(uname -m)" in
+          x86_64|amd64)
+            ossutil_url="https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip"
+            ossutil_sha256="dcc512e4a893e16bbee63bc769339d8e56b21744fd83c8212a9d8baf28767343"
+            ;;
+          aarch64|arm64)
+            ossutil_url="https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-arm64.zip"
+            ossutil_sha256="f612c2a88d4d28363e254168d521fac5df632f2547ba84eaebacf6497dc04d57"
+            ;;
+          *)
+            echo "Unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        if ! command -v unzip >/dev/null 2>&1; then
+          echo "unzip is required to install ossutil" >&2
+          exit 1
+        fi
+
+        work_dir="$(mktemp -d)"
+        install_dir="${RUNNER_TEMP:-/tmp}/ossutil-bin"
+        config_file="${RUNNER_TEMP:-/tmp}/ossutilconfig"
+        trap 'rm -rf "$work_dir"' EXIT
+
+        rm -rf "$install_dir"
+        mkdir -p "$install_dir"
+
+        curl -fsSL -o "$work_dir/ossutil.zip" "$ossutil_url"
+        echo "$ossutil_sha256  $work_dir/ossutil.zip" | sha256sum -c -
+        unzip -q "$work_dir/ossutil.zip" -d "$work_dir"
+
+        binary_path="$(find "$work_dir" -type f -name ossutil -print -quit)"
+        if [ -z "$binary_path" ]; then
+          echo "ossutil binary was not found in the downloaded archive" >&2
+          exit 1
+        fi
+
+        cp "$binary_path" "$install_dir/ossutil"
+        chmod +x "$install_dir/ossutil"
+        echo "$install_dir" >> "$GITHUB_PATH"
+
+        config_args=(
+          -c "$config_file"
+          -L EN
+          -e "${{ inputs.endpoint }}"
+          -i "${{ inputs.access-key-id }}"
+          -k "${{ inputs.access-key-secret }}"
+        )
+        if [ -n "${{ inputs.sts-token }}" ]; then
+          config_args+=(-t "${{ inputs.sts-token }}")
+        fi
+
+        "$install_dir/ossutil" config "${config_args[@]}"
+        echo "OSSUTIL_CONFIG_FILE=$config_file" >> "$GITHUB_ENV"
+    - run: |
+        set -euo pipefail
+        ossutil cp -rf --recursive \
+          "${{inputs.upload-from-dir}}" \
+          "oss://shinny-cd/${{inputs.upload-target}}/${{env.DEST_DIR}}" \
+          -c "${OSSUTIL_CONFIG_FILE}"
       shell: bash
